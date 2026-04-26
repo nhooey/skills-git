@@ -12,6 +12,7 @@
     flake-skills.lib.mkSkillFlake {
       inherit nixpkgs;
       skillName = "git";
+      packageName = "skill-git";
       src = ./.;
     };
 }
