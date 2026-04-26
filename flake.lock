@@ -7,11 +7,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1777233741,
-        "narHash": "sha256-UTKBBo/6QoQJ440javrJTETuay85+Er+7xbez0ur38Q=",
+        "lastModified": 1777235118,
+        "narHash": "sha256-a9kxbGwv7yb9dbncueDY4SJ7icrgDZ5V6vaTWVo5E+M=",
         "owner": "nhooey",
         "repo": "flake-skills",
-        "rev": "4abbc1b3f993e2e08299c0f97e08deb472417a76",
+        "rev": "cda7a3425bc6ce17844a8986cbf1f0181916388d",
         "type": "github"
       },
       "original": {
