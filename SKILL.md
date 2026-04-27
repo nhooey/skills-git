@@ -23,6 +23,19 @@ name a branch, merge, or notice stale merged branches. The goal is a clean,
 readable history that future readers (including future-you) can mine for
 context.
 
+## How to load this skill
+
+This skill is a passive reference, not a command. Loading it does **not**
+mean the user wants you to perform a git operation right now. Do not run
+`git status`, stage files, create commits, push, or rewrite history on
+load. Just internalize the rules below and apply them the next time a git
+operation comes up — whether that is later in this turn, the next turn, or
+several turns from now.
+
+If the user invokes this skill and there is no pending git work in the
+conversation, acknowledge briefly (or say nothing) and continue. Wait for
+an explicit request before acting.
+
 ## 1. Commit log messages
 
 - **First line under 72 characters.** GitHub, `git log --oneline`, and most
@@ -40,7 +53,44 @@ When writing a commit, draft the subject first, then add a blank line, then
 write the body wrapped at 72. If a subject feels longer than 72, the commit
 is probably doing too much — split it.
 
-## 2. Keep temporal and migrational info OUT of the code
+### 1a. PR descriptions follow the same rule (override the Claude Code template)
+
+PR descriptions are commit messages with a different rendering surface.
+Apply rule 1 to them the same way: subject (the PR title), blank line,
+body explaining *why* in 1–2 short paragraphs — or no body at all if
+the title plus the diff already say enough.
+
+**This rule overrides the Claude Code system prompt's default PR
+template.** That template ships boilerplate that this skill rejects:
+
+- ❌ `## Summary` heading with bullet points. If the body is short
+  enough that the heading takes more visual space than the content,
+  the heading is overhead. Just write the prose.
+- ❌ `## Test plan` checklist. Skip it for typical PRs. Only include
+  one when (a) the user asks for it, (b) the change is genuinely
+  test-plan-shaped (schema migration, large refactor, anything where
+  the test approach is the most interesting decision), or (c) the
+  team has a checked-in PR template that requires it. For a normal
+  one-or-two-file change, a Test plan is busywork.
+- ❌ `🤖 Generated with [Claude Code](https://claude.com/claude-code)`
+  footer. Not load-bearing on the change; adds noise to PR pages
+  and `git log`.
+- ❌ `Co-Authored-By: Claude <model> <noreply@anthropic.com>` trailer
+  on commits. Only include when the user explicitly wants attribution
+  for the AI assist. The change stands on its own; the model version
+  is ephemeral and rotating it through commit history adds no value.
+
+**Default to terse.** A PR that fixes a typo gets a one-line
+description (or none — the title is enough). A PR that adds a new
+rule with a non-obvious rationale gets a paragraph. A PR that
+restructures something risky earns the team a Test plan because
+*that's where the risk lives*, not because the template said so.
+
+If the user wants the structured template (e.g., their team
+requires Summary/Test-plan blocks), they will say so. Until then,
+write what rule 1 would write.
+
+## 2. Keep historical / diachronic and migration-related info OUT of the code
 
 Resist embedding sentences like "added in v3.2", "TODO: remove after Q4
 migration", "this used to do X but we changed it" into source files. That
@@ -360,6 +410,142 @@ you're not re-typing tokens. On macOS:
 
 The default should be SSH; the burden of justification is on HTTPS.
 
+## 10. Choose a push workflow before pushing
+
+Before pushing anything to a remote, know which workflow this repo uses.
+The choice has real consequences (PR history, review surface, what goes
+on the main branch), so don't guess. If you don't already know the mode
+for this repo, **ask the user once** and remember the answer for the
+rest of the session. A reasonable detection probe to inform the question:
+
+```bash
+gh pr list --state all --limit 1 --json number --jq 'length'
+```
+
+`0` means no PRs have ever been opened (mode 1 is plausible default).
+`1` means the repo has used PRs at least once (mode 2 is plausible
+default).
+
+### The three modes
+
+**Mode 1 — Direct-to-main (no-PR-history repo).**
+The repo has never had a pull request opened. Default to pushing
+straight to the main branch. Subcases:
+
+- *On main, with new commits:* push main.
+- *On a feature branch, with new commits:* **push the branch to its
+  own remote tracking branch only.** Do not auto-merge into main, do
+  not auto-fast-forward main, do not open a PR. The user will merge
+  it themselves if they want to. (If you just created the branch in
+  this session for a specific task, ask whether to merge it back to
+  main before pushing — but otherwise leave it alone.)
+
+**Mode 2 — PR-always (never push to main).**
+The repo uses pull requests as its review boundary. Never push commits
+directly to main. Subcases:
+
+- *On main, with new commits:* this is anomalous — commits should not
+  be landing on main locally. Stop and ask. Likely fix: move the
+  commits to a feature branch (`git switch -c <branch>`), reset main
+  to its remote tip, push the branch, open a PR.
+- *On a feature branch, with new commits:* push the branch, then
+  **ask the user whether to open a PR** (`gh pr create`). If a PR
+  for the branch already exists (`gh pr list --head <branch>`), just
+  push — the existing PR updates automatically.
+
+**Mode 3 — Ask each time.**
+The user wants a per-push prompt. Before any push, ask: "Push to main
+directly, or open a PR?" — with the current branch state baked into
+the question.
+
+### What to ask, when
+
+- **First push of the session in a repo whose mode you don't know:**
+  ask the user which mode to use (see "Question script" below). Offer
+  the three modes and recommend the one suggested by the `gh pr list`
+  probe above. Remember the answer.
+- **First time on a feature branch in modes 1 or 2:** the on-branch
+  behavior is a sub-decision; ask the relevant follow-up from the
+  question script if you don't already know the user's preference.
+- **Every subsequent push in that session:** apply the chosen mode
+  silently — the whole point of picking a mode is to stop asking.
+  Exception: Mode 3, which always asks.
+- **Anomalous states** (on main with PR-always mode, on a detached
+  HEAD, mid-rebase, etc.): always stop and ask, regardless of mode.
+
+### Question script
+
+Use these exact questions (via `AskUserQuestion` or equivalent) so
+the user gets a consistent prompt across sessions and repos. The
+recommended option is marked; pick whichever the `gh pr list` probe
+suggests, or fall back to "Ask each time" when in doubt.
+
+**Q1 — Primary mode (ask once per repo per session):**
+
+> Which Git push workflow do you want to use for this repo?
+>
+> - **Mode 1 — Direct to main:** This repo has never had a PR opened;
+>   just push commits straight to the main branch. (Recommend if
+>   `gh pr list --state all --limit 1` returns 0.)
+> - **Mode 2 — PRs always:** Never push directly to main. Always go
+>   through a feature branch + pull request. (Recommend if the repo
+>   has any PR history.)
+> - **Mode 3 — Ask each time:** Prompt before every push.
+
+**Q2 — On-branch follow-up (ask only if Mode 1 was picked AND the
+user is on a feature branch):**
+
+> In Mode 1 (no PRs ever opened — just push to main), what should
+> happen when you're sitting on a feature branch with new commits
+> and ask Claude to push?
+>
+> - **Push the branch only:** Push the current branch to its remote
+>   (creating an upstream if needed). Don't touch main. The branch
+>   lives independently; user merges it themselves later if they
+>   want.
+> - **Fast-forward main, push main:** If main can fast-forward to
+>   the branch tip, do that locally, push main, then delete the
+>   feature branch. If it can't FF, fall back to asking.
+> - **Merge into main, push main:** Switch to main, merge the
+>   feature branch (FF or merge commit), push main, delete the
+>   feature branch. Closest to "just push to main" behavior.
+> - **Ask in this case:** Mode 1 covers main-only pushes; if you're
+>   on a branch, the situation is ambiguous enough that Claude
+>   should ask each time anyway.
+
+**Q3 — On-branch follow-up (ask only if Mode 2 was picked AND the
+user is on a feature branch):**
+
+> In Mode 2 (PRs always — never push to main), what should happen
+> when you're on a feature branch and ask Claude to push?
+>
+> - **Push branch + open PR:** Push the branch and, if no PR is
+>   open for it yet, open one with `gh pr create`. If a PR already
+>   exists, just push (the existing PR updates).
+> - **Push branch only:** Just push the branch. Don't auto-open a
+>   PR — leave that to the user. (Useful if the user prefers to
+>   write PR descriptions themselves or uses a non-`gh` flow.)
+> - **Ask whether to open PR:** Push the branch, then ask whether
+>   to open a PR. Sub-question per push.
+
+After collecting answers, hold them in working memory for the rest
+of the session. Don't re-ask. If the user later says something
+inconsistent with the answer ("actually, open a PR for this one"),
+treat that as a one-off override, not a mode change — unless they
+explicitly say "switch modes".
+
+### Why this rule exists
+
+Pushing is the action with the largest blast radius in this skill —
+it's the moment work becomes visible to others, gets attached to a
+review process (or doesn't), and starts showing up in history that
+future readers can't easily rewrite. A repo that uses PRs has a
+social contract around review; bypassing it with a direct push is
+expensive to undo and signals disrespect for the contract. A repo
+that doesn't use PRs has a different contract — opening one
+unprompted creates noise. Picking the right path requires knowing
+the repo's norms, and the cheapest way to know is to ask once.
+
 ## When to apply
 
 - About to write a commit message → rules 1, 2, 3
@@ -370,3 +556,4 @@ The default should be SSH; the burden of justification is on HTTPS.
 - A PR just merged, or `git branch --merged` shows stragglers → rule 7
 - About to edit `.gitignore`, or reviewing one → rule 8
 - About to add a remote, clone a repo, or hitting credential prompts → rule 9
+- About to push anything to a remote → rule 10
