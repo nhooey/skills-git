@@ -133,23 +133,59 @@ Once a commit has been pushed and others may have pulled it, this rule
 flips — see rule 4 about why rewriting pushed history is a coordination
 problem.
 
-## 6. Long branch names with unique prefixes
+## 6. Long branch names with memorable, autocomplete-friendly prefixes
 
-Favour branch names like `nhooey/2026-04-rate-limit-cache-eviction` over
-short cryptic names like `fix-rl` or `wip`. Two reasons:
+Favour branch names like `nhooey/rate-limit-cache-eviction` over short
+cryptic names (`fix-rl`, `wip`) **and** over sterile dated or numeric
+names (`nhooey/2026-04-task-1234`, `tmp-3`, `feature-7`). Two reasons:
 
-- **Tab completion stays smooth.** A unique prefix (your username, a date,
-  a ticket key) means typing `git checkout nh<TAB>` narrows fast. Short
-  names collide and you end up scrolling completion menus.
+- **Tab completion stays smooth.** A unique prefix (your username, a
+  topic word, a project codename) means typing `git checkout nh<TAB>`
+  narrows fast. Short generic names collide and you end up scrolling
+  completion menus.
 - **`git branch` listings are self-documenting.** A list of 30 branches
-  with descriptive names is browsable. A list of 30 branches named `fix`,
-  `fix2`, `wip`, `wip2` is not.
+  with descriptive names is browsable. A list of 30 branches named
+  `fix`, `wip`, `tmp` is not — and a list named `nhooey/2026-04-1`,
+  `nhooey/2026-04-2`, `nhooey/2026-04-3` is almost as bad: you can't
+  read it without cross-referencing dates or tickets.
 
-Suggested shape: `<unique-prefix>/<short-description-in-kebab-case>`,
-where the prefix is your handle, an issue ID, or a date that won't
-collide with anyone else's branches. Aim for the description to be
-specific enough that you can read the branch list in 6 months and
-remember what each one was.
+### Pick prefixes a human will remember a week later
+
+The disambiguator should carry semantic weight, not just numerical
+uniqueness. **The branch name is a hook your memory hangs on**, so
+make it interesting and meaningful. Good prefixes:
+
+- **Topic words from the change itself** — `cache-eviction`,
+  `auth-rewrite`, `dark-mode`, `flaky-login-test`. By the time
+  you're triaging stale branches, you remember the *topic*, not
+  the date.
+- **Project codenames** when the team uses them — `aurora`,
+  `falcon`, `kraken`. These are memorable by design.
+- **Your handle** for shared repos so collaborators can filter
+  your branches — `nhooey/...`.
+- **Verbs that describe intent** — `fix-`, `add-`, `refactor-`,
+  `try-` — when paired with a topic word.
+
+**Avoid** out-of-context dates and numbers as prefixes:
+
+- **Dates** (`2026-04-...`, `q2-...`): the year/month is rarely
+  what you remember about a branch, and dates push the meaningful
+  topic word later in the name where autocomplete reaches it last.
+  If a branch needs a "when," `git log` already records that.
+- **Bare ticket numbers** (`task-1234`, `JIRA-1234-...`): only OK
+  if the team's culture genuinely thinks in tickets *and* you're
+  still going to follow them with a topic word
+  (`JIRA-1234-streaming-api`, never `JIRA-1234`).
+- **Counter suffixes** (`tmp-3`, `feature-7`, `wip2`): the number
+  disambiguates without describing. You're labelling without
+  naming.
+
+The rough shape: `<who-or-what-prefix>/<topic-description>`, where
+the topic description is the part you'd say out loud to a
+colleague ("can you rebase the cache-eviction branch?"). Aim for
+the name to be specific enough that you can read the branch list
+in 6 months and remember what each one was — without consulting a
+calendar or ticket tracker.
 
 ## 7. Delete merged branches; flag stragglers
 
